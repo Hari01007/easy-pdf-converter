@@ -1,7 +1,7 @@
 # Use slim Python base image
 FROM python:3.10-slim
 
-# Install system dependencies including full LibreOffice suite
+# Install system dependencies including full LibreOffice suite + Java bridge
 RUN apt-get update && \
     apt-get install -y \
     libreoffice \
@@ -9,7 +9,11 @@ RUN apt-get update && \
     libreoffice-writer \
     libreoffice-calc \
     libreoffice-impress \
-    libreoffice-common && \
+    libreoffice-common \
+    libreoffice-java-common \
+    default-jre \
+    fonts-dejavu \
+    fonts-liberation && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
