@@ -1,9 +1,15 @@
 # Use slim Python base image
 FROM python:3.10-slim
 
-# Install system dependencies including LibreOffice
+# Install system dependencies including full LibreOffice suite
 RUN apt-get update && \
-    apt-get install -y libreoffice libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress && \
+    apt-get install -y \
+    libreoffice \
+    libreoffice-core \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
+    libreoffice-common && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
