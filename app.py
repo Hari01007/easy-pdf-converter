@@ -20,10 +20,12 @@ def save_file(file):
 def merge_pdf():
     files = request.files.getlist('files')
     output = fitz.open()
+
     for f in files:
         path = save_file(f)
         doc = fitz.open(path)
         output.insert_pdf(doc)
+
     out_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4()}_merged.pdf")
     output.save(out_path)
     return send_file(out_path, as_attachment=True)
@@ -34,8 +36,10 @@ def split_pdf():
     path = save_file(file)
     doc = fitz.open(path)
     output = fitz.open()
+
     for page in doc:
         output.insert_pdf(doc, from_page=page.number, to_page=page.number)
+
     out_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4()}_split.pdf")
     output.save(out_path)
     return send_file(out_path, as_attachment=True)
@@ -45,8 +49,10 @@ def compress_pdf():
     file = request.files['file']
     path = save_file(file)
     doc = fitz.open(path)
+
     for page in doc:
         page.set_rotation(0)
+
     out_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4()}_compressed.pdf")
     doc.save(out_path, deflate=True)
     return send_file(out_path, as_attachment=True)
@@ -55,29 +61,45 @@ def compress_pdf():
 def pdf_to_word():
     file = request.files['file']
     path = save_file(file)
-    subprocess.run([
-        "libreoffice",
-        "--headless",
-        "--convert-to",
-        "docx",
-        path,
-        "--outdir",
-        UPLOAD_FOLDER
-    ])
-    docx_path = path.replace(".pdf", ".docx")
+
+    try:
+        subprocess.run([
+            "soffice",
+            "--headless",
+            "--convert-to",
+            "docx",
+            path,
+            "--outdir",
+            UPLOAD_FOLDER
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        print("LibreOffice conversion failed:", e)
+        return "Conversion failed", 500
+
+    # Build the expected output path
+    docx_path = os.path.splitext(path)[0] + ".docx"
+
+    if not os.path.exists(docx_path):
+        print("Converted file not found:", docx_path)
+        return "Converted file not found", 500
+
     return send_file(docx_path, as_attachment=True)
 
 @app.route('/jpg-to-pdf', methods=['POST'])
 def jpg_to_pdf():
     file = request.files['file']
     path = save_file(file)
+
     image = Image.open(path).convert("RGB")
     out_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4()}.pdf")
     image.save(out_path)
+
     return send_file(out_path, as_attachment=True)
+
+@app.route('/')
+def home():
+    return "Easy PDF Backend is running!"
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
-
