@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PDF Tools – Full Working Version</title>
+
+  <!-- PDF-LIB for merging & splitting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+  <!-- jsPDF for JPG → PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body { font-family: Arial; background: #f4f4f4; padding: 20px; }
+    h1 { text-align: center; }
+    .tool-box {
+      background: #fff; padding: 20px; margin: 20px auto;
+      max-width: 550px; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #4b6cff; color: #fff; border: none;
+      padding: 10px 15px; border-radius: 6px;
+      cursor: pointer; margin-top: 10px;
+    }
+    button:hover { background: #3a54cc; }
+    input[type="text"] {
+      width: 100%; padding: 8px; margin-top: 5px;
+      border: 1px solid #ccc; border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>PDF Tools – Working Demo</h1>
+
+<!-- PDF MERGE -->
+<div class="tool-box">
+  <h2>Merge PDF Files</h2>
+  <input type="file" id="mergeFiles" accept="application/pdf" multiple>
+  <button onclick="mergePDFs()">Merge PDFs</button>
+  <p id="mergeStatus"></p>
+</div>
+
+<!-- PDF SPLIT (single range) -->
+<div class="tool-box">
+  <h2>Split PDF (Single Range)</h2>
+  <input type="file" id="splitPdfFile" accept="application/pdf">
+  <br><br>
+  <label>Enter page range (example: 1-3)</label>
+  <input type="text" id="pageRange" placeholder="1-3">
+  <button onclick="splitPDF()">Split PDF</button>
+  <p id="splitStatus"></p>
+</div>
+
+<!-- PDF MULTI-RANGE SPLIT + MERGE -->
+<div class="tool-box">
+  <h2>Split PDF by Multiple Ranges + Auto Merge</h2>
+  <input type="file" id="multiSplitPdfFile" accept="application/pdf">
+  <br><br>
+  <label>Enter multiple ranges (example: 1-3, 5-7, 10-12)</label>
+  <input type="text" id="multiRanges" placeholder="1-3, 5-7, 10-12">
+  <button onclick="multiSplitAndMerge()">Split & Merge</button>
+  <p id="multiSplitStatus"></p>
+</div>
+
+<!-- JPG TO PDF -->
+<div class="tool-box">
+  <h2>JPG to PDF</h2>
+  <input type="file" id="jpgFiles" accept="image/jpeg" multiple>
+  <button onclick="jpgToPdf()">Convert JPG to PDF</button>
+  <p id="jpgStatus"></p>
+</div>
+
+<!-- PDF TO WORD (placeholder) -->
+<div class="tool-box">
+  <h2>PDF to Word</h2>
+  <p>This requires backend or paid API. Button included for future use.</p>
+  <button onclick="alert('PDF → Word requires backend or API')">Convert PDF to Word</button>
+</div>
+
+<!-- WORD TO PDF (placeholder) -->
+<div class="tool-box">
+  <h2>Word to PDF</h2>
+  <p>This requires backend or paid API. Button included for future use.</p>
+  <button onclick="alert('Word → PDF requires backend or API')">Convert Word to PDF</button>
+</div>
+
+<script>
+/* -------------------------
+   PDF MERGE FUNCTION
+--------------------------*/
+async function mergePDFs() {
+  const files = document.getElementById("mergeFiles").files;
+  if (!files.length) return alert("Select PDF files first");
+
+  const mergedPdf = await PDFLib.PDFDocument.create();
+
+  for (let file of files) {
+    const bytes = await file.arrayBuffer();
+    const pdf = await PDFLib.PDFDocument.load(bytes);
+    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+    copiedPages.forEach((page) => mergedPdf.addPage(page));
+  }
+
+  const mergedBytes = await mergedPdf.save();
+  download(mergedBytes, "merged.pdf", "application/pdf");
+  document.getElementById("mergeStatus").innerText = "Merged PDF downloaded!";
+}
+
+/* -------------------------
+   PDF SPLIT FUNCTION (single range)
+--------------------------*/
+async function splitPDF() {
+  const fileInput = document.getElementById("splitPdfFile");
+  const rangeInput = document.getElementById("pageRange").value.trim();
+  const status = document.getElementById("splitStatus");
+
+  if (!fileInput.files.length) return alert("Select a PDF file first");
+  if (!rangeInput.match(/^\d+\-\d+$/)) return alert("Enter a valid page range like 1-3");
+
+  const [start, end] = rangeInput.split("-").map(Number);
+
+  const file = fileInput.files[0];
+  const bytes = await file.arrayBuffer();
+  const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+
+  const totalPages = pdfDoc.getPageCount();
+  if (start < 1 || end > totalPages || start > end) return alert("Invalid page range");
+
+  const newPdf = await PDFLib.PDFDocument.create();
+  const pagesToCopy = [];
+
+  for (let i = start - 1; i < end; i++) pagesToCopy.push(i);
+
+  const copiedPages = await newPdf.copyPages(pdfDoc, pagesToCopy);
+  copiedPages.forEach(p => newPdf.addPage(p));
+
+  const newBytes = await newPdf.save();
+  download(newBytes, `split_${start}-${end}.pdf`, "application/pdf");
+
+  status.innerText = "Split PDF downloaded!";
+}
+
+/* -------------------------
+   MULTI-RANGE SPLIT + MERGE
+--------------------------*/
+async function multiSplitAndMerge() {
+  const fileInput = document.getElementById("multiSplitPdfFile");
+  const rangesInput = document.getElementById("multiRanges").value.trim();
+  const status = document.getElementById("multiSplitStatus");
+
+  if (!fileInput.files.length) return alert("Select a PDF file first");
+  if (!rangesInput.match(/^(\d+\-\d+)(,\s*\d+\-\d+)*$/))
+    return alert("Enter valid ranges like: 1-3, 5-7, 10-12");
+
+  const ranges = rangesInput.split(",").map(r => r.trim());
+  const file = fileInput.files[0];
+  const bytes = await file.arrayBuffer();
+  const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+
+  const totalPages = pdfDoc.getPageCount();
+  const finalPdf = await PDFLib.PDFDocument.create();
+
+  for (let range of ranges) {
+    const [start, end] = range.split("-").map(Number);
+
+    if (start < 1 || end > totalPages || start > end) {
+      alert(`Invalid range: ${range}`);
+      return;
+    }
+
+    const pagesToCopy = [];
+    for (let i = start - 1; i < end; i++) pagesToCopy.push(i);
+
+    const copiedPages = await finalPdf.copyPages(pdfDoc, pagesToCopy);
+    copiedPages.forEach(p => finalPdf.addPage(p));
+  }
+
+  const finalBytes = await finalPdf.save();
+  download(finalBytes, "custom_split_merged.pdf", "application/pdf");
+
+  status.innerText = "Custom split + merged PDF downloaded!";
+}
+
+/* -------------------------
+   JPG TO PDF FUNCTION
+--------------------------*/
+async function jpgToPdf() {
+  const files = document.getElementById("jpgFiles").files;
+  if (!files.length) return alert("Select JPG images first");
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+
+  for (let i = 0; i < files.length; i++) {
+    const imgData = await toBase64(files[i]);
+    if (i > 0) pdf.addPage();
+    pdf.addImage(imgData, "JPEG", 10, 10, 180, 260);
+  }
+
+  pdf.save("images.pdf");
+  document.getElementById("jpgStatus").innerText = "JPG converted to PDF!";
+}
+
+/* -------------------------
+   HELPER FUNCTIONS
+--------------------------*/
+function download(data, filename, type) {
+  const blob = new Blob([data], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+}
+
+function toBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+</script>
+
+</body>
+</html>
